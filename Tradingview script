@@ -1,0 +1,58 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © MrW123
+
+//@version=5
+strategy("Optimized XAUUSD 30-Minute Strategy with Cost Reduction", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=15)
+
+// Input Parameters
+emaShortLength = input.int(5, title="Short EMA Length")
+emaLongLength = input.int(20, title="Long EMA Length")
+rsiShortLength = input.int(7, title="Short RSI Length")
+rsiLongLength = input.int(14, title="Long RSI Length")
+rsiLongThreshold = input.int(50, title="RSI Long Threshold")
+rsiShortThreshold = input.int(50, title="RSI Short Threshold")
+donchianLength = input.int(5, title="Donchian Channel Length")
+atrLength = input.int(14, title="ATR Length")
+atrMultiplier = input.float(1.0, title="ATR Multiplier for Trailing Stop")
+takeProfitMultiplier = input.float(2.0, title="ATR Multiplier for Take Profit")
+
+// EMA Calculation
+emaShort = ta.ema(close, emaShortLength)
+emaLong = ta.ema(close, emaLongLength)
+
+// RSI Calculation
+rsiShort = ta.rsi(close, rsiShortLength)
+rsiLong = ta.rsi(close, rsiLongLength)
+
+// Donchian Channel Calculation
+donchianUpper = ta.highest(high, donchianLength)
+donchianLower = ta.lowest(low, donchianLength)
+donchianMid = (donchianUpper + donchianLower) / 2
+
+// ATR Calculation for Trailing Stop and Take Profit
+atrValue = ta.atr(atrLength)
+stopLossLong = close - atrValue * atrMultiplier
+stopLossShort = close + atrValue * atrMultiplier
+takeProfitLong = close + atrValue * takeProfitMultiplier
+takeProfitShort = close - atrValue * takeProfitMultiplier
+
+// Time-Based Filtering (Focusing on high-volatility times)
+timeFilter = hour(time) >= 7 and hour(time) <= 11 or hour(time) >= 13 and hour(time) <= 17
+
+// Long and Short Conditions
+longCondition = emaShort > emaLong and rsiShort > rsiLongThreshold and rsiLong > rsiLongThreshold and close > donchianMid and timeFilter
+shortCondition = emaShort < emaLong and rsiShort < rsiShortThreshold and rsiLong < rsiShortThreshold and close < donchianMid and timeFilter
+
+// Execute trades with dynamic position sizing
+if (longCondition)
+    strategy.entry("Long", strategy.long, stop=stopLossLong, limit=takeProfitLong)
+
+if (shortCondition)
+    strategy.entry("Short", strategy.short, stop=stopLossShort, limit=takeProfitShort)
+
+// Exit on Opposite Signal
+if (strategy.opentrades > 0)
+    if (shortCondition and strategy.position_size > 0)
+        strategy.close("Long")
+    else if (longCondition and strategy.position_size < 0)
+        strategy.close("Short")
